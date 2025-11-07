@@ -4,8 +4,19 @@ from datetime import datetime
 
 from textual import work
 from textual.app import App, ComposeResult
-from textual.containers import Container, Vertical, Horizontal
-from textual.widgets import Header, Footer, Static, Button, Label, LoadingIndicator, ListView, ListItem
+from textual.containers import Container, Vertical, Horizontal, VerticalScroll
+from textual.widgets import (
+    Header,
+    Footer,
+    Static,
+    Button,
+    Label,
+    LoadingIndicator,
+    ListView,
+    ListItem,
+    TabbedContent,
+    TabPane,
+)
 from textual.screen import Screen
 from textual.worker import Worker, WorkerState
 
@@ -21,6 +32,8 @@ from .database import (
     initialize_database,
     create_snapshot,
     get_all_snapshots,
+    get_snapshot_accounts,
+    get_snapshot_diff,
     delete_snapshot,
     DatabaseError,
 )
@@ -486,8 +499,7 @@ class ViewSnapshotsScreen(Screen):
             self.app.pop_screen()
         elif event.button.id == "view-button":
             if self.selected_snapshot_id is not None:
-                # TODO: Navigate to snapshot detail screen
-                self.app.push_screen("snapshot_detail")
+                self.app.push_screen(SnapshotDetailScreen(self.selected_snapshot_id))
             else:
                 self.notify("Please select a snapshot first", severity="warning")
         elif event.button.id == "delete-button":
@@ -512,6 +524,257 @@ class ViewSnapshotsScreen(Screen):
 
         except DatabaseError as e:
             self.notify(f"Error deleting snapshot: {e}", severity="error")
+
+
+class SnapshotDetailScreen(Screen):
+    """Screen for viewing detailed snapshot analysis."""
+
+    CSS = """
+    SnapshotDetailScreen {
+        align: center top;
+    }
+
+    #detail-container {
+        width: 90%;
+        height: 95%;
+        border: solid $primary;
+        padding: 1 2;
+        margin: 1 0;
+    }
+
+    #snapshot-header {
+        width: 100%;
+        height: auto;
+        text-align: center;
+        margin-bottom: 1;
+        padding: 1;
+        background: $boost;
+    }
+
+    TabbedContent {
+        width: 100%;
+        height: 1fr;
+        margin: 1 0;
+    }
+
+    TabPane {
+        padding: 1;
+    }
+
+    .account-list {
+        width: 100%;
+        height: 1fr;
+    }
+
+    .account-item {
+        width: 100%;
+        padding: 1;
+        margin: 0 0 1 0;
+        border: solid $panel;
+        background: $surface;
+    }
+
+    .account-username {
+        color: $accent;
+    }
+
+    .account-display-name {
+        color: $text;
+    }
+
+    .account-url {
+        color: $text-muted;
+    }
+
+    .empty-list {
+        width: 100%;
+        height: auto;
+        text-align: center;
+        padding: 2;
+        color: $text-muted;
+    }
+
+    .action-buttons {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, snapshot_id: int):
+        """Initialize the snapshot detail screen.
+
+        Args:
+            snapshot_id: ID of the snapshot to display
+        """
+        super().__init__()
+        self.snapshot_id = snapshot_id
+
+    def compose(self) -> ComposeResult:
+        """Create child widgets for the screen."""
+        yield Header()
+
+        with Container(id="detail-container"):
+            # Header with snapshot info
+            try:
+                snapshots = get_all_snapshots()
+                current_snapshot = next(
+                    (s for s in snapshots if s["id"] == self.snapshot_id), None
+                )
+
+                if current_snapshot:
+                    dt = datetime.fromisoformat(current_snapshot["created_at"])
+                    formatted_date = dt.strftime("%Y-%m-%d %H:%M:%S")
+                    header_text = (
+                        f"Snapshot #{self.snapshot_id}\n"
+                        f"{formatted_date}"
+                    )
+                    yield Static(header_text, id="snapshot-header")
+            except Exception:
+                yield Static(f"Snapshot #{self.snapshot_id}", id="snapshot-header")
+
+            # Tabbed content for the 4 lists
+            with TabbedContent():
+                # Tab 1: Who doesn't follow you back
+                with TabPane("Not Following Back"):
+                    yield from self._create_account_list("not_following_back")
+
+                # Tab 2: Who you're not following back
+                with TabPane("Not Followed Back"):
+                    yield from self._create_account_list("not_followed_back")
+
+                # Tab 3: New followers (since previous snapshot)
+                with TabPane("New Followers"):
+                    yield from self._create_diff_list("new_followers")
+
+                # Tab 4: Unfollowers (since previous snapshot)
+                with TabPane("Unfollowers"):
+                    yield from self._create_diff_list("unfollowers")
+
+            # Action buttons
+            with Horizontal(classes="action-buttons"):
+                yield Button("Back to List", id="back-button", variant="default")
+
+        yield Footer()
+
+    def _create_account_list(self, relationship_filter: str) -> ComposeResult:
+        """Create a scrollable list of accounts.
+
+        Args:
+            relationship_filter: Filter type for get_snapshot_accounts
+
+        Returns:
+            Generator yielding VerticalScroll with account items
+        """
+        try:
+            accounts = get_snapshot_accounts(self.snapshot_id, relationship_filter)
+
+            with VerticalScroll(classes="account-list"):
+                if not accounts:
+                    empty_msg = self._get_empty_message(relationship_filter)
+                    yield Static(empty_msg, classes="empty-list")
+                else:
+                    for account in accounts:
+                        yield self._create_account_widget(account)
+
+        except DatabaseError as e:
+            with VerticalScroll(classes="account-list"):
+                yield Static(f"Error loading accounts: {e}", classes="empty-list")
+
+    def _create_diff_list(self, diff_type: str) -> ComposeResult:
+        """Create a scrollable list showing diff between snapshots.
+
+        Args:
+            diff_type: Either 'new_followers' or 'unfollowers'
+
+        Returns:
+            Generator yielding VerticalScroll with account items
+        """
+        try:
+            # Get all snapshots to find the previous one
+            snapshots = get_all_snapshots()
+            snapshot_ids = [s["id"] for s in snapshots]
+
+            # Find the previous snapshot
+            try:
+                current_index = snapshot_ids.index(self.snapshot_id)
+                if current_index < len(snapshot_ids) - 1:
+                    previous_snapshot_id = snapshot_ids[current_index + 1]
+
+                    # Get the diff
+                    new_followers, unfollowers = get_snapshot_diff(
+                        self.snapshot_id, previous_snapshot_id
+                    )
+
+                    accounts = new_followers if diff_type == "new_followers" else unfollowers
+
+                    with VerticalScroll(classes="account-list"):
+                        if not accounts:
+                            empty_msg = self._get_empty_message(diff_type)
+                            yield Static(empty_msg, classes="empty-list")
+                        else:
+                            for account in accounts:
+                                yield self._create_account_widget(account)
+                else:
+                    # This is the first snapshot, no previous to compare
+                    with VerticalScroll(classes="account-list"):
+                        yield Static(
+                            "This is your first snapshot.\n\n"
+                            "Create another snapshot to see changes!",
+                            classes="empty-list"
+                        )
+
+            except ValueError:
+                with VerticalScroll(classes="account-list"):
+                    yield Static("Snapshot not found.", classes="empty-list")
+
+        except DatabaseError as e:
+            with VerticalScroll(classes="account-list"):
+                yield Static(f"Error loading accounts: {e}", classes="empty-list")
+
+    def _create_account_widget(self, account: dict) -> Container:
+        """Create a widget for displaying account information.
+
+        Args:
+            account: Account dictionary with username, display_name, url
+
+        Returns:
+            Container with formatted account info
+        """
+        account_text = (
+            f"[bold]@{account['username']}[/bold]\n"
+            f"{account['display_name']}\n"
+            f"[dim]{account['url']}[/dim]"
+        )
+
+        return Static(account_text, classes="account-item", markup=True)
+
+    def _get_empty_message(self, list_type: str) -> str:
+        """Get appropriate empty message for each list type.
+
+        Args:
+            list_type: Type of list (relationship filter or diff type)
+
+        Returns:
+            Message to display when list is empty
+        """
+        messages = {
+            "not_following_back": "Everyone you follow follows you back!",
+            "not_followed_back": "You follow back everyone who follows you!",
+            "new_followers": "No new followers since last snapshot.",
+            "unfollowers": "No one unfollowed you since last snapshot.",
+        }
+        return messages.get(list_type, "No accounts found.")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press events."""
+        if event.button.id == "back-button":
+            self.app.pop_screen()
 
 
 class PettyApp(App):
