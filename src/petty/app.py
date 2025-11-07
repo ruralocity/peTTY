@@ -42,6 +42,12 @@ from .database import (
 class MainMenuScreen(Screen):
     """Main menu screen for peTTY."""
 
+    BINDINGS = [
+        ("c", "create_snapshot", "Create Snapshot"),
+        ("v", "view_snapshots", "View Snapshots"),
+        ("q", "quit", "Quit"),
+    ]
+
     CSS = """
     MainMenuScreen {
         align: center middle;
@@ -50,7 +56,7 @@ class MainMenuScreen(Screen):
     #menu-container {
         width: 70;
         height: auto;
-        border: solid $primary;
+        border: thick $primary;
         padding: 1 2;
     }
 
@@ -152,9 +158,31 @@ class MainMenuScreen(Screen):
         elif event.button.id == "view-snapshots":
             self.app.push_screen(ViewSnapshotsScreen())
 
+    def action_create_snapshot(self) -> None:
+        """Action to create a snapshot (keyboard shortcut)."""
+        if self.error_message is None:
+            self.app.push_screen(CreateSnapshotScreen())
+        else:
+            self.notify("Please fix configuration errors first", severity="warning")
+
+    def action_view_snapshots(self) -> None:
+        """Action to view snapshots (keyboard shortcut)."""
+        if self.error_message is None:
+            self.app.push_screen(ViewSnapshotsScreen())
+        else:
+            self.notify("Please fix configuration errors first", severity="warning")
+
+    def action_quit(self) -> None:
+        """Action to quit (keyboard shortcut)."""
+        self.app.exit()
+
 
 class CreateSnapshotScreen(Screen):
     """Screen for creating a new snapshot."""
+
+    BINDINGS = [
+        ("escape", "back", "Back"),
+    ]
 
     CSS = """
     CreateSnapshotScreen {
@@ -164,7 +192,7 @@ class CreateSnapshotScreen(Screen):
     #snapshot-container {
         width: 70;
         height: auto;
-        border: solid $primary;
+        border: thick $primary;
         padding: 2;
     }
 
@@ -365,9 +393,19 @@ class CreateSnapshotScreen(Screen):
         if event.button.id == "back-button":
             self.app.pop_screen()
 
+    def action_back(self) -> None:
+        """Action to go back (keyboard shortcut)."""
+        self.app.pop_screen()
+
 
 class ViewSnapshotsScreen(Screen):
     """Screen for viewing and managing snapshots."""
+
+    BINDINGS = [
+        ("escape", "back", "Back"),
+        ("enter", "view_selected", "View Details"),
+        ("d", "delete_selected", "Delete"),
+    ]
 
     CSS = """
     ViewSnapshotsScreen {
@@ -377,7 +415,7 @@ class ViewSnapshotsScreen(Screen):
     #snapshots-container {
         width: 80;
         height: 90%;
-        border: solid $primary;
+        border: thick $primary;
         padding: 1 2;
     }
 
@@ -525,9 +563,35 @@ class ViewSnapshotsScreen(Screen):
         except DatabaseError as e:
             self.notify(f"Error deleting snapshot: {e}", severity="error")
 
+    def action_back(self) -> None:
+        """Action to go back (keyboard shortcut)."""
+        self.app.pop_screen()
+
+    def action_view_selected(self) -> None:
+        """Action to view selected snapshot details (keyboard shortcut)."""
+        if self.selected_snapshot_id is not None:
+            self.app.push_screen(SnapshotDetailScreen(self.selected_snapshot_id))
+        else:
+            self.notify("Please select a snapshot first", severity="warning")
+
+    def action_delete_selected(self) -> None:
+        """Action to delete selected snapshot (keyboard shortcut)."""
+        if self.selected_snapshot_id is not None:
+            self._delete_selected_snapshot()
+        else:
+            self.notify("Please select a snapshot first", severity="warning")
+
 
 class SnapshotDetailScreen(Screen):
     """Screen for viewing detailed snapshot analysis."""
+
+    BINDINGS = [
+        ("escape", "back", "Back"),
+        ("1", "tab_1", "Not Following Back"),
+        ("2", "tab_2", "Not Followed Back"),
+        ("3", "tab_3", "New Followers"),
+        ("4", "tab_4", "Unfollowers"),
+    ]
 
     CSS = """
     SnapshotDetailScreen {
@@ -537,7 +601,7 @@ class SnapshotDetailScreen(Screen):
     #detail-container {
         width: 90%;
         height: 95%;
-        border: solid $primary;
+        border: thick $primary;
         padding: 1 2;
         margin: 1 0;
     }
@@ -775,6 +839,30 @@ class SnapshotDetailScreen(Screen):
         """Handle button press events."""
         if event.button.id == "back-button":
             self.app.pop_screen()
+
+    def action_back(self) -> None:
+        """Action to go back (keyboard shortcut)."""
+        self.app.pop_screen()
+
+    def action_tab_1(self) -> None:
+        """Switch to tab 1."""
+        tabbed = self.query_one(TabbedContent)
+        tabbed.active = "tab-1"
+
+    def action_tab_2(self) -> None:
+        """Switch to tab 2."""
+        tabbed = self.query_one(TabbedContent)
+        tabbed.active = "tab-2"
+
+    def action_tab_3(self) -> None:
+        """Switch to tab 3."""
+        tabbed = self.query_one(TabbedContent)
+        tabbed.active = "tab-3"
+
+    def action_tab_4(self) -> None:
+        """Switch to tab 4."""
+        tabbed = self.query_one(TabbedContent)
+        tabbed.active = "tab-4"
 
 
 class PettyApp(App):
