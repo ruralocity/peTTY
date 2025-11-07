@@ -16,11 +16,12 @@ from textual.widgets import (
     ListItem,
     TabbedContent,
     TabPane,
+    Input,
 )
 from textual.screen import Screen
 from textual.worker import Worker, WorkerState
 
-from .config import read_config, ConfigError
+from .config import read_config, config_exists, ConfigError
 from .mastodon_client import (
     create_client,
     verify_credentials,
@@ -37,6 +38,357 @@ from .database import (
     delete_snapshot,
     DatabaseError,
 )
+from .oauth import (
+    register_app,
+    get_authorization_url,
+    exchange_code_for_token,
+    complete_oauth_setup,
+    open_browser,
+    OAuthError,
+)
+
+
+class OAuthSetupScreen(Screen):
+    """Screen for OAuth setup flow."""
+
+    BINDINGS = [
+        ("escape", "quit", "Quit"),
+    ]
+
+    CSS = """
+    OAuthSetupScreen {
+        align: center middle;
+    }
+
+    #setup-container {
+        width: 80;
+        height: auto;
+        border: thick $primary;
+        padding: 2;
+    }
+
+    .setup-title {
+        width: 100%;
+        text-align: center;
+        color: $accent;
+        margin-bottom: 1;
+    }
+
+    .setup-instructions {
+        width: 100%;
+        margin: 1 0;
+        padding: 1;
+        background: $panel;
+    }
+
+    Input {
+        width: 100%;
+        margin: 1 0;
+    }
+
+    .auth-url-box {
+        width: 100%;
+        margin: 1 0;
+        padding: 1;
+        background: $boost;
+        border: solid $accent;
+    }
+
+    .action-buttons {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        margin-top: 2;
+    }
+
+    Button {
+        margin: 0 1;
+    }
+
+    #error-message {
+        width: 100%;
+        padding: 1;
+        background: $error;
+        color: $text;
+        text-align: center;
+        margin: 1 0;
+    }
+
+    #success-message {
+        width: 100%;
+        padding: 1;
+        background: $success;
+        color: $text;
+        text-align: center;
+        margin: 1 0;
+    }
+
+    #loading-container {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        margin: 2 0;
+    }
+    """
+
+    def __init__(self):
+        """Initialize OAuth setup screen."""
+        super().__init__()
+        self.step = "server_url"  # server_url, show_auth_url, enter_code, processing, complete
+        self.server_url = ""
+        self.client_id = ""
+        self.client_secret = ""
+        self.auth_url = ""
+
+    def compose(self) -> ComposeResult:
+        """Create child widgets for the screen."""
+        yield Header()
+
+        with Container(id="setup-container"):
+            yield Static("OAuth Setup", classes="setup-title")
+            yield Static(
+                "Welcome to peTTY! Let's connect your Mastodon account.\n\n"
+                "Enter your Mastodon server URL (e.g., https://mastodon.social):",
+                classes="setup-instructions",
+                id="instructions"
+            )
+
+            yield Input(
+                placeholder="https://mastodon.social",
+                id="server-url-input",
+            )
+
+            with Horizontal(classes="action-buttons", id="button-container"):
+                yield Button("Continue", id="continue-button", variant="primary")
+                yield Button("Quit", id="quit-button", variant="error")
+
+        yield Footer()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press events."""
+        if event.button.id == "quit-button":
+            self.app.exit()
+        elif event.button.id == "continue-button":
+            if self.step == "server_url":
+                self._handle_server_url_submit()
+            elif self.step == "enter_code":
+                self._handle_auth_code_submit()
+        elif event.button.id == "open-browser-button":
+            open_browser(self.auth_url)
+            self.notify("Browser opened. Please authorize the app.", severity="information")
+        elif event.button.id == "done-button":
+            # Setup complete, navigate to main menu
+            self.app.pop_screen()
+            self.app.push_screen(MainMenuScreen())
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle input submission (Enter key)."""
+        if event.input.id == "server-url-input" and self.step == "server_url":
+            self._handle_server_url_submit()
+        elif event.input.id == "auth-code-input" and self.step == "enter_code":
+            self._handle_auth_code_submit()
+
+    def _handle_server_url_submit(self) -> None:
+        """Handle server URL submission."""
+        server_input = self.query_one("#server-url-input", Input)
+        server_url = server_input.value.strip()
+
+        if not server_url:
+            self.notify("Please enter a server URL", severity="error")
+            return
+
+        # Add https:// if not present
+        if not server_url.startswith(("http://", "https://")):
+            server_url = f"https://{server_url}"
+
+        self.server_url = server_url
+
+        # Start registration worker
+        self._show_loading("Registering app with server...")
+        self.register_app_worker()
+
+    def _handle_auth_code_submit(self) -> None:
+        """Handle authorization code submission."""
+        code_input = self.query_one("#auth-code-input", Input)
+        auth_code = code_input.value.strip()
+
+        if not auth_code:
+            self.notify("Please enter the authorization code", severity="error")
+            return
+
+        # Start token exchange worker
+        self._show_loading("Exchanging code for access token...")
+        self.exchange_token_worker(auth_code)
+
+    @work(exclusive=True, thread=True)
+    def register_app_worker(self) -> dict:
+        """Worker to register app with Mastodon server."""
+        try:
+            client_id, client_secret = register_app(self.server_url)
+            auth_url = get_authorization_url(self.server_url, client_id, client_secret)
+
+            return {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_url": auth_url,
+            }
+        except OAuthError as e:
+            raise Exception(f"OAuth error: {e}")
+        except Exception as e:
+            raise Exception(f"Unexpected error: {e}")
+
+    @work(exclusive=True, thread=True)
+    def exchange_token_worker(self, auth_code: str) -> str:
+        """Worker to exchange authorization code for access token."""
+        try:
+            access_token = exchange_code_for_token(
+                self.server_url,
+                self.client_id,
+                self.client_secret,
+                auth_code,
+            )
+            return access_token
+        except OAuthError as e:
+            raise Exception(f"OAuth error: {e}")
+        except Exception as e:
+            raise Exception(f"Unexpected error: {e}")
+
+    def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        """Handle worker state changes."""
+        if event.worker.name == "register_app_worker":
+            if event.state == WorkerState.SUCCESS:
+                result = event.worker.result
+                self.client_id = result["client_id"]
+                self.client_secret = result["client_secret"]
+                self.auth_url = result["auth_url"]
+                self._show_auth_url_step()
+            elif event.state == WorkerState.ERROR:
+                self._show_error(str(event.worker.error))
+
+        elif event.worker.name == "exchange_token_worker":
+            if event.state == WorkerState.SUCCESS:
+                access_token = event.worker.result
+                self._save_credentials(access_token)
+            elif event.state == WorkerState.ERROR:
+                self._show_error(str(event.worker.error))
+
+    def _show_loading(self, message: str) -> None:
+        """Show loading indicator with message."""
+        self.step = "processing"
+
+        # Clear container and show loading
+        container = self.query_one("#setup-container", Container)
+        container.remove_children()
+
+        container.mount(Static("OAuth Setup", classes="setup-title"))
+        container.mount(Static(message, classes="setup-instructions"))
+
+        # Mount the container first, then add the loading indicator
+        loading_container = Container(id="loading-container")
+        container.mount(loading_container)
+        loading_container.mount(LoadingIndicator())
+
+    def _show_auth_url_step(self) -> None:
+        """Show the authorization URL step."""
+        self.step = "enter_code"
+
+        # Clear container and show auth URL
+        container = self.query_one("#setup-container", Container)
+        container.remove_children()
+
+        container.mount(Static("OAuth Setup - Step 2", classes="setup-title"))
+
+        instructions = Static(
+            "Great! Now you need to authorize peTTY to access your Mastodon account.\n\n"
+            "Click the button below to open your browser, or manually visit this URL:",
+            classes="setup-instructions"
+        )
+        container.mount(instructions)
+
+        # Show the auth URL in a copyable box
+        auth_url_box = Static(self.auth_url, classes="auth-url-box")
+        container.mount(auth_url_box)
+
+        # Add open browser button
+        browser_container = Horizontal(classes="action-buttons")
+        container.mount(browser_container)
+        browser_container.mount(Button("Open Browser", id="open-browser-button", variant="success"))
+
+        # Instructions for code entry
+        code_instructions = Static(
+            "\nAfter authorizing, you'll receive an authorization code.\n"
+            "Enter it below:",
+            classes="setup-instructions"
+        )
+        container.mount(code_instructions)
+
+        # Input for auth code
+        code_input = Input(
+            placeholder="Authorization code",
+            id="auth-code-input",
+        )
+        container.mount(code_input)
+
+        # Buttons
+        button_container = Horizontal(classes="action-buttons")
+        container.mount(button_container)
+        button_container.mount(Button("Continue", id="continue-button", variant="primary"))
+        button_container.mount(Button("Quit", id="quit-button", variant="error"))
+
+        # Focus the input
+        code_input.focus()
+
+    def _save_credentials(self, access_token: str) -> None:
+        """Save OAuth credentials to config."""
+        try:
+            complete_oauth_setup(
+                self.server_url,
+                self.client_id,
+                self.client_secret,
+                access_token,
+            )
+            self._show_success()
+        except Exception as e:
+            self._show_error(f"Failed to save credentials: {e}")
+
+    def _show_success(self) -> None:
+        """Show success message."""
+        self.step = "complete"
+
+        container = self.query_one("#setup-container", Container)
+        container.remove_children()
+
+        container.mount(Static("Setup Complete!", classes="setup-title"))
+
+        success_msg = Static(
+            "Your Mastodon account has been connected successfully!\n\n"
+            "You can now use peTTY to track your followers.",
+            id="success-message"
+        )
+        container.mount(success_msg)
+
+        button_container = Horizontal(classes="action-buttons")
+        container.mount(button_container)
+        button_container.mount(Button("Get Started", id="done-button", variant="primary"))
+
+    def _show_error(self, error_message: str) -> None:
+        """Show error message and allow retry."""
+        container = self.query_one("#setup-container", Container)
+
+        # Check if error message already exists
+        try:
+            existing_error = container.query_one("#error-message")
+            existing_error.update(error_message)
+        except Exception:
+            # Add new error message
+            error_widget = Static(error_message, id="error-message")
+            container.mount(error_widget)
+
+        self.notify("An error occurred. Please try again.", severity="error")
+
+    def action_quit(self) -> None:
+        """Action to quit."""
+        self.app.exit()
 
 
 class MainMenuScreen(Screen):
@@ -880,8 +1232,23 @@ class PettyApp(App):
         # Initialize database
         initialize_database()
 
-        # Push main menu screen
-        self.push_screen(MainMenuScreen())
+        # Check if config exists and has required credentials
+        if not config_exists():
+            # First time setup - show OAuth flow
+            self.push_screen(OAuthSetupScreen())
+        else:
+            try:
+                config = read_config()
+                # Check if we have access token (complete setup)
+                if not config.get("mastodon_access_token"):
+                    # Incomplete setup - show OAuth flow
+                    self.push_screen(OAuthSetupScreen())
+                else:
+                    # Config exists and is complete - show main menu
+                    self.push_screen(MainMenuScreen())
+            except ConfigError:
+                # Config exists but is invalid - show OAuth flow
+                self.push_screen(OAuthSetupScreen())
 
 
 if __name__ == "__main__":

@@ -7,11 +7,17 @@ from typing import TypedDict
 import tomli_w
 
 
-class Config(TypedDict):
-    """Configuration structure for peTTY."""
+class Config(TypedDict, total=False):
+    """Configuration structure for peTTY.
+
+    Note: total=False makes all fields optional for TypedDict,
+    but we validate required fields at runtime.
+    """
 
     mastodon_server_url: str
     mastodon_access_token: str
+    client_id: str
+    client_secret: str
 
 
 class ConfigError(Exception):
@@ -68,7 +74,7 @@ def read_config() -> Config:
     if not config_path.exists():
         raise ConfigError(
             f"Configuration file not found at {config_path}. "
-            "Please create a config file with your server URL and access token."
+            "Please run the OAuth setup to configure peTTY."
         )
 
     try:
@@ -80,13 +86,18 @@ def read_config() -> Config:
     # Validate required fields
     if "mastodon_server_url" not in data:
         raise ConfigError("Missing required field 'mastodon_server_url' in config")
-    if "mastodon_access_token" not in data:
-        raise ConfigError("Missing required field 'mastodon_access_token' in config")
 
-    return Config(
-        mastodon_server_url=str(data["mastodon_server_url"]),
-        mastodon_access_token=str(data["mastodon_access_token"]),
-    )
+    # Build config with all available fields
+    config = Config(mastodon_server_url=str(data["mastodon_server_url"]))
+
+    if "mastodon_access_token" in data:
+        config["mastodon_access_token"] = str(data["mastodon_access_token"])
+    if "client_id" in data:
+        config["client_id"] = str(data["client_id"])
+    if "client_secret" in data:
+        config["client_secret"] = str(data["client_secret"])
+
+    return config
 
 
 def write_config(config: Config) -> None:
@@ -108,11 +119,12 @@ def write_config(config: Config) -> None:
         raise ConfigError(f"Failed to write config file: {e}")
 
 
-def validate_config(config: Config) -> bool:
+def validate_config(config: Config, require_access_token: bool = True) -> bool:
     """Validate configuration values.
 
     Args:
         config: Configuration to validate
+        require_access_token: Whether to require access_token (False during OAuth setup)
 
     Returns:
         True if valid
@@ -120,15 +132,16 @@ def validate_config(config: Config) -> bool:
     Raises:
         ConfigError: If validation fails
     """
-    if not config["mastodon_server_url"]:
+    if not config.get("mastodon_server_url"):
         raise ConfigError("mastodon_server_url cannot be empty")
-
-    if not config["mastodon_access_token"]:
-        raise ConfigError("mastodon_access_token cannot be empty")
 
     # Basic URL validation
     if not config["mastodon_server_url"].startswith(("http://", "https://")):
         raise ConfigError("mastodon_server_url must start with http:// or https://")
+
+    # Check for access token if required
+    if require_access_token and not config.get("mastodon_access_token"):
+        raise ConfigError("mastodon_access_token cannot be empty")
 
     return True
 
