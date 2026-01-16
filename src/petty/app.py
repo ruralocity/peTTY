@@ -607,7 +607,7 @@ class CreateSnapshotScreen(Screen):
                 yield LoadingIndicator()
 
             with Vertical(classes="action-buttons"):
-                yield Button("Back to Menu", id="back-button", variant="default")
+                yield Button("Back", id="back-button", variant="default")
 
         yield Footer()
 
@@ -836,7 +836,7 @@ class ViewSnapshotsScreen(Screen):
             except DatabaseError as e:
                 yield Static(f"Error loading snapshots: {e}", id="error-message")
                 with Horizontal(classes="action-buttons"):
-                    yield Button("Back to Menu", id="back-button", variant="default")
+                    yield Button("Back", id="back-button", variant="default")
                 yield Footer()
                 return
 
@@ -871,7 +871,7 @@ class ViewSnapshotsScreen(Screen):
                            disabled=len(self.snapshots) == 0)
                 yield Button("Delete", id="delete-button", variant="error",
                            disabled=len(self.snapshots) == 0)
-                yield Button("Back to Menu", id="back-button", variant="default")
+                yield Button("Back", id="back-button", variant="default")
 
         yield Footer()
 
@@ -1079,7 +1079,7 @@ class SnapshotDetailScreen(Screen):
 
             # Action buttons
             with Horizontal(classes="action-buttons"):
-                yield Button("Back to List", id="back-button", variant="default")
+                yield Button("Back", id="back-button", variant="default")
 
         yield Footer()
 
