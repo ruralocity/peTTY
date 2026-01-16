@@ -987,24 +987,26 @@ class SnapshotDetailScreen(Screen):
         height: 1fr;
     }
 
-    .account-item {
+    .list-header {
         width: 100%;
-        padding: 1;
-        margin: 0 0 1 0;
-        border: solid $panel;
-        background: $surface;
-    }
-
-    .account-username {
-        color: $accent;
-    }
-
-    .account-display-name {
+        padding: 0 0 1 0;
         color: $text;
     }
 
-    .account-url {
-        color: $text-muted;
+    .list-separator {
+        width: 100%;
+        height: 1;
+        background: $panel;
+        margin-bottom: 1;
+    }
+
+    .account-row {
+        width: 100%;
+        padding: 0;
+    }
+
+    .account-row Static {
+        color: $text;
     }
 
     .empty-list {
