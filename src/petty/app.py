@@ -1005,10 +1005,6 @@ class SnapshotDetailScreen(Screen):
         padding: 0;
     }
 
-    .account-row Static {
-        color: $text;
-    }
-
     .empty-list {
         width: 100%;
         height: auto;
@@ -1151,6 +1147,8 @@ class SnapshotDetailScreen(Screen):
         Returns:
             Generator yielding VerticalScroll with account items
         """
+        title = self._get_list_title(diff_type)
+
         try:
             # Get all snapshots to find the previous one
             snapshots = get_all_snapshots()
@@ -1171,14 +1169,17 @@ class SnapshotDetailScreen(Screen):
 
                     with VerticalScroll(classes="account-list"):
                         if not accounts:
+                            yield from self._create_list_header(title, 0)
                             empty_msg = self._get_empty_message(diff_type)
                             yield Static(empty_msg, classes="empty-list")
                         else:
+                            yield from self._create_list_header(title, len(accounts))
                             for account in accounts:
                                 yield self._create_account_widget(account)
                 else:
                     # This is the first snapshot, no previous to compare
                     with VerticalScroll(classes="account-list"):
+                        yield from self._create_list_header(title, 0)
                         yield Static(
                             "This is your first snapshot.\n\n"
                             "Create another snapshot to see changes!",
@@ -1187,10 +1188,12 @@ class SnapshotDetailScreen(Screen):
 
             except ValueError:
                 with VerticalScroll(classes="account-list"):
+                    yield from self._create_list_header(title, 0)
                     yield Static("Snapshot not found.", classes="empty-list")
 
         except DatabaseError as e:
             with VerticalScroll(classes="account-list"):
+                yield from self._create_list_header(title, 0)
                 yield Static(f"Error loading accounts: {e}", classes="empty-list")
 
     def _create_account_widget(self, account: dict) -> Static:
