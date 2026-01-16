@@ -429,11 +429,11 @@ class MainMenuScreen(Screen):
         width: 100%;
         height: auto;
         align: center middle;
+        margin-top: 1;
     }
 
     Button {
-        width: 100%;
-        margin: 1 0;
+        margin: 0 1;
     }
     """
 
@@ -485,7 +485,7 @@ class MainMenuScreen(Screen):
                 yield Static(error_text, id="error-message")
 
             # Menu buttons
-            with Vertical(classes="menu-buttons"):
+            with Horizontal(classes="menu-buttons"):
                 yield Button("Create Snapshot", id="create-snapshot",
                            variant="primary", disabled=self.error_message is not None)
                 yield Button("View Snapshots", id="view-snapshots",
