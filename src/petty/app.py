@@ -1173,22 +1173,21 @@ class SnapshotDetailScreen(Screen):
             with VerticalScroll(classes="account-list"):
                 yield Static(f"Error loading accounts: {e}", classes="empty-list")
 
-    def _create_account_widget(self, account: dict) -> Container:
+    def _create_account_widget(self, account: dict) -> Static:
         """Create a widget for displaying account information.
 
         Args:
             account: Account dictionary with username, display_name, url
 
         Returns:
-            Container with formatted account info
+            Static with formatted account info
         """
-        account_text = (
-            f"[bold]@{account['username']}[/bold]\n"
-            f"{account['display_name']}\n"
-            f"[dim]{account['url']}[/dim]"
-        )
+        username = f"@{account['username']}"
+        display_name = account['display_name'] or ""
+        # Pad username to 20 chars for alignment
+        account_text = f"{username:<20} {display_name}"
 
-        return Static(account_text, classes="account-item", markup=True)
+        return Static(account_text, classes="account-row")
 
     def _get_empty_message(self, list_type: str) -> str:
         """Get appropriate empty message for each list type.
