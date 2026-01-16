@@ -942,10 +942,11 @@ class SnapshotDetailScreen(Screen):
 
     BINDINGS = [
         ("escape", "back", "Back"),
-        ("1", "tab_1", "Not Following Back"),
-        ("2", "tab_2", "Not Followed Back"),
-        ("3", "tab_3", "New Followers"),
-        ("4", "tab_4", "Unfollowers"),
+        ("1", "tab_1", "Not Following"),
+        ("2", "tab_2", "Not Followed"),
+        ("3", "tab_3", "New"),
+        ("4", "tab_4", "Lost"),
+        ("q", "quit", "Quit"),
     ]
 
     CSS = """
@@ -1219,6 +1220,10 @@ class SnapshotDetailScreen(Screen):
         """Switch to tab 4."""
         tabbed = self.query_one(TabbedContent)
         tabbed.active = "tab-4"
+
+    def action_quit(self) -> None:
+        """Action to quit (keyboard shortcut)."""
+        self.app.exit()
 
 
 class PettyApp(App):
