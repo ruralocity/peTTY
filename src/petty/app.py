@@ -64,7 +64,7 @@ class OAuthSetupScreen(Screen):
         width: 90%;
         height: auto;
         border: thick $primary;
-        padding: 2;
+        padding: 1 2;
     }
 
     .setup-instructions {
@@ -538,7 +538,7 @@ class CreateSnapshotScreen(Screen):
         width: 90%;
         height: auto;
         border: thick $primary;
-        padding: 2;
+        padding: 1 2;
     }
 
     #status-message {
