@@ -61,7 +61,7 @@ class OAuthSetupScreen(Screen):
     }
 
     #setup-container {
-        width: 80;
+        width: 90%;
         height: auto;
         border: thick $primary;
         padding: 2;
@@ -406,7 +406,7 @@ class MainMenuScreen(Screen):
     }
 
     #menu-container {
-        width: 70;
+        width: 90%;
         height: auto;
         border: thick $primary;
         padding: 1 2;
@@ -542,7 +542,7 @@ class CreateSnapshotScreen(Screen):
     }
 
     #snapshot-container {
-        width: 70;
+        width: 90%;
         height: auto;
         border: thick $primary;
         padding: 2;
@@ -765,7 +765,7 @@ class ViewSnapshotsScreen(Screen):
     }
 
     #snapshots-container {
-        width: 80;
+        width: 90%;
         height: 90%;
         border: thick $primary;
         padding: 1 2;
