@@ -753,8 +753,9 @@ class ViewSnapshotsScreen(Screen):
 
     BINDINGS = [
         ("escape", "back", "Back"),
-        ("enter", "view_selected", "View Details"),
+        ("enter", "view_selected", "View"),
         ("d", "delete_selected", "Delete"),
+        ("q", "quit", "Quit"),
     ]
 
     CSS = """
@@ -930,6 +931,10 @@ class ViewSnapshotsScreen(Screen):
             self._delete_selected_snapshot()
         else:
             self.notify("Please select a snapshot first", severity="warning")
+
+    def action_quit(self) -> None:
+        """Action to quit (keyboard shortcut)."""
+        self.app.exit()
 
 
 class SnapshotDetailScreen(Screen):
