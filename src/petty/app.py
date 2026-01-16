@@ -527,6 +527,7 @@ class CreateSnapshotScreen(Screen):
 
     BINDINGS = [
         ("escape", "back", "Back"),
+        ("q", "quit", "Quit"),
     ]
 
     CSS = """
@@ -741,6 +742,10 @@ class CreateSnapshotScreen(Screen):
     def action_back(self) -> None:
         """Action to go back (keyboard shortcut)."""
         self.app.pop_screen()
+
+    def action_quit(self) -> None:
+        """Action to quit (keyboard shortcut)."""
+        self.app.exit()
 
 
 class ViewSnapshotsScreen(Screen):
