@@ -1085,6 +1085,19 @@ class SnapshotDetailScreen(Screen):
 
         yield Footer()
 
+    def _create_list_header(self, title: str, count: int) -> ComposeResult:
+        """Create a header for an account list.
+
+        Args:
+            title: The list title (e.g., "Not Following Back")
+            count: Number of accounts in the list
+
+        Returns:
+            Generator yielding header widgets
+        """
+        yield Static(f"{title} ({count} accounts)", classes="list-header")
+        yield Static("", classes="list-separator")
+
     def _create_account_list(self, relationship_filter: str) -> ComposeResult:
         """Create a scrollable list of accounts.
 
