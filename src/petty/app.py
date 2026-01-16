@@ -67,13 +67,6 @@ class OAuthSetupScreen(Screen):
         padding: 2;
     }
 
-    .setup-title {
-        width: 100%;
-        text-align: center;
-        color: $accent;
-        margin-bottom: 1;
-    }
-
     .setup-instructions {
         width: 100%;
         margin: 1 0;
@@ -145,7 +138,7 @@ class OAuthSetupScreen(Screen):
         yield Header()
 
         with Container(id="setup-container"):
-            yield Static("OAuth Setup", classes="setup-title")
+            yield Static("OAuth Setup", classes="screen-title")
             yield Static(
                 "Welcome to peTTY! Let's connect your Mastodon account.\n\n"
                 "Enter your Mastodon server URL (e.g., https://mastodon.social):",
@@ -280,7 +273,7 @@ class OAuthSetupScreen(Screen):
         container = self.query_one("#setup-container", Container)
         container.remove_children()
 
-        container.mount(Static("OAuth Setup", classes="setup-title"))
+        container.mount(Static("OAuth Setup", classes="screen-title"))
         container.mount(Static(message, classes="setup-instructions"))
 
         # Mount the container first, then add the loading indicator
@@ -296,7 +289,7 @@ class OAuthSetupScreen(Screen):
         container = self.query_one("#setup-container", Container)
         container.remove_children()
 
-        container.mount(Static("OAuth Setup - Step 2", classes="setup-title"))
+        container.mount(Static("OAuth Setup - Step 2", classes="screen-title"))
 
         instructions = Static(
             "Great! Now you need to authorize peTTY to access your Mastodon account.\n\n"
@@ -358,7 +351,7 @@ class OAuthSetupScreen(Screen):
         container = self.query_one("#setup-container", Container)
         container.remove_children()
 
-        container.mount(Static("Setup Complete!", classes="setup-title"))
+        container.mount(Static("Setup Complete!", classes="screen-title"))
 
         success_msg = Static(
             "Your Mastodon account has been connected successfully!\n\n"
@@ -456,7 +449,7 @@ class MainMenuScreen(Screen):
         yield Header()
 
         with Container(id="menu-container"):
-            yield Static("peTTY - Mastodon Follower Tracker", classes="title")
+            yield Static("peTTY - Mastodon Follower Tracker", classes="screen-title")
 
             # Try to load config and user info
             try:
@@ -606,7 +599,7 @@ class CreateSnapshotScreen(Screen):
         yield Header()
 
         with Container(id="snapshot-container"):
-            yield Label("Create New Snapshot", id="title")
+            yield Static("Create New Snapshot", classes="screen-title")
             yield Label("", id="status-message")
 
             with Container(id="loading-container"):
@@ -829,7 +822,7 @@ class ViewSnapshotsScreen(Screen):
         yield Header()
 
         with Container(id="snapshots-container"):
-            yield Label("Your Snapshots", id="title")
+            yield Static("Your Snapshots", classes="screen-title")
 
             # Load snapshots
             try:
@@ -962,6 +955,7 @@ class SnapshotDetailScreen(Screen):
         width: 100%;
         height: auto;
         text-align: center;
+        color: $accent;
         margin-bottom: 1;
         padding: 1;
         background: $boost;
@@ -1222,6 +1216,15 @@ class PettyApp(App):
 
     TITLE = "peTTY"
     SUB_TITLE = "Follower Tracker"
+
+    CSS = """
+    .screen-title {
+        width: 100%;
+        text-align: center;
+        color: $accent;
+        margin-bottom: 1;
+    }
+    """
 
     BINDINGS = [
         ("q", "quit", "Quit"),
