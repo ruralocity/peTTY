@@ -1098,6 +1098,23 @@ class SnapshotDetailScreen(Screen):
         yield Static(f"{title} ({count} accounts)", classes="list-header")
         yield Static("", classes="list-separator")
 
+    def _get_list_title(self, list_type: str) -> str:
+        """Get display title for each list type.
+
+        Args:
+            list_type: Type of list (relationship filter or diff type)
+
+        Returns:
+            Human-readable title for the list
+        """
+        titles = {
+            "not_following_back": "Not Following Back",
+            "not_followed_back": "Not Followed Back",
+            "new_followers": "New Followers",
+            "unfollowers": "Unfollowers",
+        }
+        return titles.get(list_type, "Accounts")
+
     def _create_account_list(self, relationship_filter: str) -> ComposeResult:
         """Create a scrollable list of accounts.
 
@@ -1109,12 +1126,15 @@ class SnapshotDetailScreen(Screen):
         """
         try:
             accounts = get_snapshot_accounts(self.snapshot_id, relationship_filter)
+            title = self._get_list_title(relationship_filter)
 
             with VerticalScroll(classes="account-list"):
                 if not accounts:
+                    yield from self._create_list_header(title, 0)
                     empty_msg = self._get_empty_message(relationship_filter)
                     yield Static(empty_msg, classes="empty-list")
                 else:
+                    yield from self._create_list_header(title, len(accounts))
                     for account in accounts:
                         yield self._create_account_widget(account)
 
